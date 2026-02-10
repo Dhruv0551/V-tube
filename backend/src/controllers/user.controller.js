@@ -100,21 +100,25 @@ const loginUser = asyncHandler(async (req, res) => {
   const { AccessToken, RefreshToken } = await generateRefreshAndAccessToken(
     user._id
   );
-
   const loggedInUser = await User.findById(user._id).select(
     "-password -refreshToken"
   );
 
-  const options = {
-    httpOnly: true,
-    secure: true,
-  };
+const options = {
+  httpOnly: true,
+  sameSite: "lax",
+  secure: false,
+  path: "/",
+};
 
-  console.log(AccessToken)
-  console.log(RefreshToken)
+
+  console.log(AccessToken);
+  console.log(RefreshToken);
 
   return res
     .status(200)
+    .clearCookie("accessToken", options)
+    .clearCookie("refreshToken", options)
     .cookie("accessToken", AccessToken, options)
     .cookie("refreshToken", RefreshToken, options)
     .json(
@@ -141,7 +145,6 @@ const logoutUser = asyncHandler(async (req, res) => {
 
   const options = {
     httpOnly: true,
-    secure: true,
   };
 
   return res
