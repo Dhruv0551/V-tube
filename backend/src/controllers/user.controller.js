@@ -3,7 +3,6 @@ import asyncHandler from "../utils/asyncHandler.js";
 import ApiError from "../utils/apiError.js";
 import { User } from "../models/user.model.js";
 import uploadOnCloudinary from "../service/cloudinary.js";
-import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 
 const generateRefreshAndAccessToken = async (userID) => {
@@ -180,7 +179,7 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
       httpOnly: true,
     };
 
-    res
+    return res
       .status(200)
       .cookie("accessToken", AccessToken, options)
       .cookie("refreshToken", RefreshToken)
@@ -195,4 +194,82 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
   }
 });
 
-export { registerUser, loginUser, logoutUser, refreshAccessToken };
+const changeUserPassword = asyncHandler(async (req, res) => {
+  const { oldPass, newPass } = req.body;
+  if (newPass === oldPass)
+    throw new ApiError(
+      409,
+      "Old Password and New Password must not be identical"
+    );
+
+  const user = await User.findById(req.user?._id);
+
+  const passCompare = await user.isPasswordCorrect(oldPass);
+  if (!passCompare) throw new ApiError(409, "Incorrect Password");
+
+  user.password = newPass;
+  await user.save({ validateBeforeSave: false });
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, "Password changed successfully"));
+});
+
+const getCurrentUser = asyncHandler(async (req, res) => {
+  return res
+    .status(200)
+    .json(new ApiResponse(200, "User fetched Successfully", req.user));
+});
+
+const updateUserDetails = asyncHandler(async (req, res) => {
+  const { username, fullName } = req.body;
+
+  if (!username || !fullName)
+    throw new ApiError(401, "All fields are required");
+
+  const user = await User.findByIdAndUpdate(
+    req.user?._id,
+    {
+      $set: {
+        username,
+        fullName,
+      },
+    },
+    { new: true }
+  ).select("-password");
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, "User Updated SuccessFully", user));
+});
+
+const updateUserAvatar = asyncHandler(async (req, res) => {
+  const avatarLocalPath = req.file?.avatarImg;
+
+  if (!avatarLocalPath) throw new ApiError(400, "Avatar file missing");
+
+  const response = await uploadOnCloudinary(avatarLocalPath);
+
+  if (!response.url) throw new ApiError(400, "Error while uploading Avatar");
+  const user = await User.findByIdAndUpdate(
+    req.user._id,
+    {
+      avatar: response.url,
+    },
+    { new: true }
+  );
+  return res
+    .status(200)
+    .json(new ApiResponse(200, "Avatar updated successfully", response.url));
+});
+
+export {
+  registerUser,
+  loginUser,
+  logoutUser,
+  refreshAccessToken,
+  changeUserPassword,
+  getCurrentUser,
+  updateUserDetails,
+  updateUserAvatar,
+};
